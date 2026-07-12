@@ -1,0 +1,30 @@
+{
+  "name": "knowledge-base-lite",
+  "title": "知识库lite",
+  "description": "研发知识库 AI 问答助手，直接将知识文档作为上下文发送给 LLM 生成答案，只需要将 .md 知识库文档放入internal-plugins/knowledge-base-lite/public/docs/ 目录即可",
+  "author": "yihengye",
+  "version": "3.0.0",
+  "main": "index.html",
+  "preload": "preload/services.js",
+  "logo": "logo.png",
+  "pluginSetting": {
+    "single": true,
+    "height": 500
+  },
+  "features": [
+    {
+      "code": "search",
+      "explain": "知识库问答",
+      "icon": "logo.png",
+      "cmds": [
+        "知识库",
+        {
+          "type": "over",
+          "label": "知识库问答",
+          "minLength": 2,
+          "maxLength": 500
+        }
+      ]
+    }
+  ]
+}

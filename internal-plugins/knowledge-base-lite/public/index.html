@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>知识库问答</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg-primary, #1e1e2e);
+        color: var(--text-primary, #cdd6f4);
+        padding: 16px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      .container {
+        max-width: 720px;
+        margin: 0 auto;
+        width: 100%;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .doc-bar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        background: var(--bg-secondary, #313244);
+        border-radius: 8px;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .doc-bar span {
+        color: var(--text-secondary, #a6adc8);
+      }
+      .content {
+        flex: 1;
+        overflow-y: auto;
+        margin-bottom: 12px;
+      }
+      .question {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        padding: 10px 14px;
+        background: var(--bg-secondary, #313244);
+        border-radius: 8px;
+        border-left: 3px solid #89b4fa;
+      }
+      .answer {
+        font-size: 14px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin-bottom: 12px;
+      }
+      .answer code {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .answer pre {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 12px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 8px 0;
+      }
+      .answer pre code {
+        background: none;
+        padding: 0;
+      }
+      .status {
+        font-size: 13px;
+        color: #f9e2af;
+        margin: 8px 0;
+      }
+      .error {
+        color: #f38ba8;
+        padding: 12px;
+        background: rgba(243, 139, 168, 0.1);
+        border-radius: 8px;
+      }
+      .input-row {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+        padding: 10px 12px;
+        background: var(--bg-secondary, #313244);
+        border-radius: 8px;
+      }
+      .input-row input {
+        flex: 1;
+        background: var(--bg-primary, #1e1e2e);
+        color: var(--text-primary, #cdd6f4);
+        border: 1px solid rgba(205, 214, 244, 0.15);
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 14px;
+        outline: none;
+      }
+      .input-row input:focus {
+        border-color: #89b4fa;
+      }
+      .input-row button {
+        background: #89b4fa;
+        color: #1e1e2e;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .input-row button:hover {
+        opacity: 0.85;
+      }
+      .input-row button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .empty-hint {
+        text-align: center;
+        color: var(--text-secondary, #a6adc8);
+        margin-top: 40px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="docBar" class="doc-bar"></div>
+      <div id="content" class="content">
+        <div id="emptyHint" class="empty-hint">输入问题，搜索知识库</div>
+      </div>
+      <div class="input-row">
+        <input id="queryInput" type="text" placeholder="输入你的问题…" autofocus />
+        <button id="sendBtn" onclick="sendQuery()">发送</button>
+      </div>
+    </div>
+
+    <script>
+      var $ = function (id) {
+        return document.getElementById(id)
+      }
+      var currentQuery = ''
+      var isProcessing = false
+
+      function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      }
+
+      function clearContent() {
+        var el = $('content')
+        el.querySelectorAll('.question,.answer,.status,.error,.empty-hint').forEach(
+          function (node) {
+            node.remove()
+          }
+        )
+      }
+
+      function addElement(tag, className, html) {
+        var el = document.createElement(tag)
+        if (className) el.className = className
+        if (html) el.innerHTML = html
+        $('content').appendChild(el)
+        return el
+      }
+
+      async function sendQuery() {
+        if (isProcessing) return
+        var input = $('queryInput')
+        var query = input.value.trim()
+        if (!query) return
+        input.value = ''
+        input.disabled = true
+        $('sendBtn').disabled = true
+        isProcessing = true
+        currentQuery = query
+        await handleQuery(query)
+        input.disabled = false
+        $('sendBtn').disabled = false
+        isProcessing = false
+        input.focus()
+      }
+
+      async function init() {
+        $('queryInput').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') sendQuery()
+        })
+
+        var docs = window.services.getDocList()
+        if (docs.length > 0) {
+          $('docBar').innerHTML =
+            '<span>&#128218; ' +
+            docs.length +
+            ' 篇知识文档已加载：' +
+            escapeHtml(docs.join(', ')) +
+            '</span>'
+        } else {
+          $('docBar').innerHTML =
+            '<span>&#9888; docs 目录为空，请将 .md 文档放入插件 docs/ 目录</span>'
+        }
+
+        window.ztools.onPluginEnter(async function (payload) {
+          var query = payload && payload.payload ? String(payload.payload).trim() : ''
+          if (!query || query === currentQuery) return
+          currentQuery = query
+          $('queryInput').value = ''
+          await handleQuery(query)
+        })
+      }
+
+      async function handleQuery(query) {
+        clearContent()
+        addElement('div', 'question', '&#128269; ' + escapeHtml(query))
+        addElement('div', 'status', '正在检索知识库...')
+
+        try {
+          var result = await window.services.ask(query, function (chunk) {
+            var answerEl = $('content').querySelector('.answer')
+            if (!answerEl) {
+              var statusEl = $('content').querySelector('.status')
+              if (statusEl) statusEl.remove()
+              answerEl = addElement('div', 'answer', '')
+            }
+            if (chunk.content) answerEl.textContent += chunk.content
+          })
+
+          var statusEl = $('content').querySelector('.status')
+          if (statusEl) statusEl.remove()
+        } catch (e) {
+          var statusEl = $('content').querySelector('.status')
+          if (statusEl) statusEl.remove()
+          addElement('div', 'error', '问答失败: ' + escapeHtml(e.message || '未知错误'))
+        }
+      }
+
+      init()
+    </script>
+  </body>
+</html>
